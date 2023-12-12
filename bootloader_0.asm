@@ -13,7 +13,7 @@ start:
     mov cl, 0x02 ; sector read after boot sector
 
     mov ah, 0x02 ; read disk function
-    mov al, 0x03 ; number of sectors to read
+    mov al, 0x04 ; number of sectors to read
     int 0x13     ; call interrupt 13h
 
     jc disk_error ; jump if carry flag is set

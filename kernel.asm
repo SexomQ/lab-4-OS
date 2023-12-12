@@ -1,23 +1,16 @@
 
-section .data
-    WAIT_FOR_ENTER db "Press ENTER to restart...", 0
-    pointer_store dw 0 ; used by str_len to avoid changing extra registers
-
-section .bss
-    input resb 1
-
-section .text
-    global main
-
 main:
+    mov si, 0
+    mov di, 0
+    
     call clear_screen
 
     mov si, WAIT_FOR_ENTER
-    mov bh, 0
-    mov bl, 0x0F
-    mov dh, 0
-    mov dl, 0
-    call print_string
+    mov bh, 0 ; page number
+    mov bl, 3ch ; text color
+    mov dh, 1 ; row
+    mov dl, 0 ; column
+    call print_string; print the prompt string
 
     jmp $
 
@@ -63,5 +56,13 @@ print_string:
     int 10h
     popa
     ret 
+
+; section .data
+    WAIT_FOR_ENTER db "Press ENTER to restart... hi", 0
+    pointer_store dw 0 ; used by str_len to avoid changing extra registers
+
+; section .bss
+    ; input resb 1
+
 
 times 512 - ($-$$) db 0

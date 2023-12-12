@@ -12,17 +12,15 @@ main:
     mov [BOOT_DISK], dl; save boot disk number
 
     call clear_screen
-    ; mov bh, 0                 
-    ; mov ax, 0H
-    ; mov es, ax                 
-    ; mov bp, msg   
+    mov word [cursor_coords], 010FH
+    call sync_cursor    
 
-    ; mov bl, 07H                
-    ; mov cx, 51               
-    mov dh, 1    ; row             
-    mov dl, 15    ; column 
+
     mov si, msg
-    call print_string
+    mov bh, 0; page number
+    mov bl, 7; text color
+    mov dx, word [cursor_coords]; get the cursor coordinates
+    call print_string; print the prompt string
 
     ; mov ax, 1301H
     ; int 10H 
@@ -36,12 +34,14 @@ kernel_load:
     mov byte [head], 0
     mov byte [cylinder], 0
     mov byte [sector], 0
-    ; mov byte [number_of_sectors], 0
+    mov byte [number_of_sectors], 0
     mov word [ram_address], 0
     mov word [ram_address + 2], 0
     mov word [error_code], 0
+    mov word [far_ptr], 0
+    mov word [far_ptr + 2], 0
 
-    mov word [cursor_coords], 0200H
+    mov word [cursor_coords], 0301H
     call sync_cursor
 
     ;; Get the floppy head
@@ -53,7 +53,7 @@ kernel_load:
     call string_to_int
     mov byte [head], al
 
-    mov word [cursor_coords], 0300H
+    mov word [cursor_coords], 0401H
     call sync_cursor
 
     ; get the cylinder
@@ -65,7 +65,7 @@ kernel_load:
     call string_to_int
     mov byte [cylinder], al
 
-    mov word [cursor_coords], 0400H
+    mov word [cursor_coords], 0501H
     call sync_cursor
 
     ; get the sector
@@ -77,7 +77,19 @@ kernel_load:
     call string_to_int
     mov byte [sector], al
 
-    mov word [cursor_coords], 0500H
+    mov word [cursor_coords], 0601H
+    call sync_cursor
+
+    ; get the sector
+    mov si, NUMBER_OF_SECTORS_PROMPT
+    mov di, conversion_buffer
+    call prompt
+    ;; Convert the string to a number
+    mov si, conversion_buffer
+    call string_to_int
+    mov byte [number_of_sectors], al
+
+    mov word [cursor_coords], 0701H
     call sync_cursor
 
     ; get the ram address
@@ -89,7 +101,7 @@ kernel_load:
     mov di, ram_address
     call string_to_hex
 
-    mov word [cursor_coords], 0600H
+    mov word [cursor_coords], 0801H
     call sync_cursor
 
     ; get the offset address
@@ -101,7 +113,7 @@ kernel_load:
     mov di, ram_address + 2
     call string_to_hex
 
-    mov word [cursor_coords], 0700H
+    mov word [cursor_coords], 0901H
     call sync_cursor
 
     ; setup es:bx to point to the sector to load to memory
@@ -110,36 +122,90 @@ kernel_load:
     mov bx, [ram_address + 2]
 
     mov dl, 0x00 ; boot from boot drive
-    mov ch, byte [cylinder] ; cylinder
-    mov dh, byte [head] ; head
-    mov cl, byte [sector] ; sector read after boot sector
+    mov ch, [cylinder] ; cylinder
+    mov dh, [head] ; head
+    mov cl, [sector] ; sector
 
     mov ah, 0x02 ; read disk function
-    mov al, 3 ; number of sectors to read
+    mov al, [number_of_sectors] ; number of sectors to read
     int 0x13     ; call interrupt 13h
 
-    jc disk_error ; jump if carry flag is set
+    cmp ah, 0
+        mov al, ah; convert ah to ax
+        mov ah, 0
+        mov [error_code], ax
 
-    mov ax, [ram_address]
-    mov ds, ax
-    mov es, ax
-    mov ss, ax
-    mov sp, ax
+        mov ax, 0x7e00
+        mov es, ax ; set es to the segment where the bootloader is loaded
 
-wait_for_enter:
+    jne .floppy_error
+
+    ;; print success message
+    mov si, FLOPPY_SUCCESS_MSG
+    mov dx, 0A01H; cursor coordinates
+    mov bl, 2; green color
+    mov bh, 0
+    call print_string
+    mov bl, 0x0F; reset color
+
+    mov dx, 0C01H;
+    mov si, WAIT_FOR_ENTER_MSG
+    call print_string
+    jmp wait_for_enter_ok
+
+    .floppy_error:      
+        mov si, FLOPPY_ERROR_MSG
+        mov dx, 0A01H; cursor coordinates
+        mov bl, 4; red color
+        mov bh, 0
+        call print_string
+        mov bl, 0x0F; reset color
+        ;; convert error code to string representation of number
+        mov ax, [error_code]
+        mov di, conversion_buffer
+        call int_to_string
+        mov si, conversion_buffer
+        mov dx, 0A20H; cursor coordinates
+        mov bh, 0
+        call print_string
+
+        mov dx, 0C01H;
+        mov si, WAIT_FOR_ENTER_TO_RESTART_MSG
+        call print_string
+        jmp wait_for_enter_not_ok
+
+wait_for_enter_not_ok:
+    mov ah, 0
+    int 16h
+
+    cmp al, 0dh
+    jz main
+
+    jmp wait_for_enter_not_ok
+
+wait_for_enter_ok:
     mov ah, 0
     int 16h
 
     cmp al, 0dh
     jz jump_to_kernel
 
-    jmp wait_for_enter
+    jmp wait_for_enter_ok
 
 jump_to_kernel:
-    mov dl, [BOOT_DISK]
-    mov es, [ram_address]
+    mov ax, [ram_address]
     mov bx, [ram_address + 2]
-    jmp [es:bx]
+    mov ds, ax
+    mov es, ax
+    ; mov ss, ax
+    ; mov sp, bx 
+    ; mov bp, bx
+
+    mov [far_ptr], bx
+    mov [far_ptr + 2], ax
+
+    jmp far [far_ptr]
+
 
 clear_screen:
     mov ah, 0x00
@@ -372,9 +438,9 @@ string_to_hex:
 
 
 ; section .data
-    msg dd "------> Welcome to TUD_OS! by Tudor Sclifos <------", 10, 0
-    press dd "Press ENTER to continue.", 10, 0
-    error_disk dd "Disk Error!", 10, 0 
+    msg db "------> Welcome to TUD_OS! by Tudor Sclifos <------", 10, 0
+    press db "Press ENTER to continue.", 10, 0
+    error_disk db "Disk Error!", 10, 0 
 
     cursor_coords:
         cursor_x db 0
@@ -383,7 +449,9 @@ string_to_hex:
     HEAD_PROMPT db "Enter head: ", 0
     CYLINDER_PROMPT db "Enter cylinder: ", 0
     SECTOR_PROMPT db "Enter sector: ", 0   
+    NUMBER_OF_SECTORS_PROMPT db "Enter number of sectors: ", 0
     WAIT_FOR_ENTER_MSG db "Press ENTER to continue", 0
+    WAIT_FOR_ENTER_TO_RESTART_MSG db "Press ENTER to restart", 0
     FLOPPY_SUCCESS_MSG db "Floppy read/write success", 0
     FLOPPY_ERROR_MSG db "Floppy read/write error: ", 0
     RAM_ADDRESS_PROMPT db "Enter RAM address: ", 0
@@ -398,6 +466,11 @@ string_to_hex:
     sector db 0
     error_code dw 0
     pointer_store dw 0 ; used by str_len to avoid changing extra registers
+    number_of_sectors db 0
+
+    far_ptr:
+        dw 0x0000 ; Offset
+        dw 0x0000 ; Segment
 
 ; section .bss
     conversion_buffer resb 32
@@ -405,5 +478,7 @@ string_to_hex:
     ram_address resb 4
     ram_buffer resb 512
 
+    
 
-times 1536 - ($ - $$) db 0
+
+times 2048 - ($ - $$) db 0
