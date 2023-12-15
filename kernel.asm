@@ -1,68 +1,24 @@
+start:
+    ; setup es:bx to point to the sector to load to memory
+    mov bx, 8500h
+    mov es, bx
+    mov bx, 0000h
 
-main:
-    mov si, 0
-    mov di, 0
-    
-    call clear_screen
+    mov dl, 0x00 ; boot from boot drive
+    mov ch, 0x00 ; cylinder
+    mov dh, 0x00 ; head
+    mov cl, 0x07 ; sector read after boot sector
 
-    mov si, WAIT_FOR_ENTER
-    mov bh, 0 ; page number
-    mov bl, 3ch ; text color
-    mov dh, 1 ; row
-    mov dl, 0 ; column
-    call print_string; print the prompt string
+    mov ah, 0x02 ; read disk function
+    mov al, 0x01 ; number of sectors to read
+    int 0x13     ; call interrupt 13h
 
-    jmp $
+    mov ax, 8500h ; setup segment registers
+    mov ds, ax
+    ; mov es, ax
+    ; mov ss, ax
+    ; mov sp, ax
 
-clear_screen:
-    mov ah, 0
-    mov al, 3
-    int 0x10
-    ret
+    jmp 8500h:0000h ; jump to the loaded sector
 
-
-;; Gets string length
-;; Parameters: si - pointer to string
-;; Returns:    cx    - string length
-;; Notes       String must be zero terminated
-str_len:
-    mov cx, 0
-    mov [pointer_store], si
-    cmp byte [si], 0
-    je .str_len_end
-
-    .str_len_loop:
-        inc cx
-        inc si
-        cmp byte [si], 0
-        jne .str_len_loop
-
-    .str_len_end:
-        mov si, [pointer_store]
-        ret
-
-;; Prints zero terminated string
-;; Parameters: bh    - page number
-;;             bl    - video attribute http://www.techhelpmanual.com/87-screen_attributes.html
-;;             dh,dl - coords to start writing
-;;             si - pointer to string
-;; Returns:    None
-print_string:
-    pusha
-    ;; Get string length
-    call str_len
-    mov ax, 1300h
-    mov bp, si
-    int 10h
-    popa
-    ret 
-
-; section .data
-    WAIT_FOR_ENTER db "Press ENTER to restart... hi", 0
-    pointer_store dw 0 ; used by str_len to avoid changing extra registers
-
-; section .bss
-    ; input resb 1
-
-
-times 512 - ($-$$) db 0
+times 512-($-$$) db 0 ; pad the rest of the sector with zeros

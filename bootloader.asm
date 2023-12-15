@@ -8,6 +8,9 @@
 %define SPACE 0x20
 %define MAX_CHARACTER_COUNT 200
 
+section .text
+    global main
+
 main:
     mov [BOOT_DISK], dl; save boot disk number
 
@@ -135,7 +138,7 @@ kernel_load:
         mov ah, 0
         mov [error_code], ax
 
-        mov ax, 0x7e00
+        mov ax, 0x0100
         mov es, ax ; set es to the segment where the bootloader is loaded
 
     jne .floppy_error
@@ -193,16 +196,11 @@ wait_for_enter_ok:
     jmp wait_for_enter_ok
 
 jump_to_kernel:
-    mov ax, [ram_address]
-    mov bx, [ram_address + 2]
-    mov ds, ax
-    mov es, ax
-    ; mov ss, ax
-    ; mov sp, bx 
-    ; mov bp, bx
+    mov ax, [ram_address + 2]
+    mov bx, [ram_address]
 
-    mov [far_ptr], bx
-    mov [far_ptr + 2], ax
+    mov [far_ptr], ax
+    mov [far_ptr + 2], bx
 
     jmp far [far_ptr]
 
