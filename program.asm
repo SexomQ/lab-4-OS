@@ -19,6 +19,7 @@ main:
     jmp wait_enter_continue
 
 wait_enter_continue:
+
     mov ah, 0
     int 16h
 
@@ -28,8 +29,11 @@ wait_enter_continue:
     jmp wait_enter_continue
 
 get_input:
+    call clear_current_row
     mov word [cursor_coords], 0301h
     call sync_cursor
+
+    call clear_current_row
 
     ;; Get the floppy head
     mov si, INPUT_PROMPT
@@ -37,26 +41,48 @@ get_input:
     call prompt
     ;; Convert the string to a number
     mov si, input
-    call invert_string
 
     mov word [cursor_coords], 0601h
     call sync_cursor
-    
-    mov si, di
-    call print_string
 
-    ; mov word [cursor_coords], 0401H
-    ; call sync_cursor
+    call clear_current_row
 
-    ; jmp $
+    mov si, input
+    call str_len
 
-;; Invert the string from si
-;; Parameters: si - pointer to string
-;;             di - pointer to output string
-;; Returns:    None
+    mov bx, cx
+    .print_input:
+        dec bx
+        mov ah, 0eh
+        mov al, [si + bx]
+        int 10h
+        loop .print_input
 
-invert_string:
-    
+    jmp wait_enter_to_restart
+
+wait_enter_to_restart:
+    mov word [cursor_coords], 0901h
+    call sync_cursor
+
+    mov si, WAIT_FOR_ENTER_TO_RESTART_MSG
+    mov bh, 0 ; page number
+    mov bl, 0ch ; text color
+    mov dx, word [cursor_coords]
+    call print_string; print the prompt string
+
+    ;; Wait for enter to restart
+    mov ah, 0
+    int 16h
+
+    cmp al, 0dh
+    jz go_to_bootloader
+
+    jmp wait_enter_to_restart
+
+go_to_bootloader:
+    ; Invoke interrupt 0x19 to restart the system
+    mov ah, 0
+    int 0x19
 
 clear_screen:
     mov ah, 0
@@ -106,6 +132,21 @@ sync_cursor:
     mov ah, 0x02
     mov bh, 0x00
     mov dx, [cursor_coords]
+    int 0x10
+    popa
+    ret
+
+clear_current_row:
+    pusha
+    mov ah, 0x02
+    mov bh, 0x00
+    mov dx, [cursor_coords]
+    int 0x10
+
+    mov ah, 0x0A
+    mov bh, 0x00
+    mov al, ' '
+    mov cx, 0x50
     int 0x10
     popa
     ret
@@ -184,7 +225,6 @@ prompt:
 
 ; section .bss
     input resb 200
-    output resb 200
 
 
 times 1024 - ($-$$) db 0

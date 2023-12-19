@@ -3,6 +3,12 @@ ORG 7c00H
 
 start:
     mov [BOOT_DISK], dl ; save boot drive number
+    xor ax, ax ; set ax to 0
+    mov ds, ax ; set ds to 0
+    mov es, ax ; set es to 0
+    mov ss, ax ; set ss to 0
+    mov sp, 7c00h ; set sp to 7c00h
+
     ; setup es:bx to point to the sector to load to memory
     mov bx, 0100h
     mov es, bx

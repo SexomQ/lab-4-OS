@@ -12,6 +12,10 @@ section .text
     global main
 
 main:
+    ; mov ax, 0x0100
+    ; mov ds, ax
+    ; mov es, ax
+
     mov [BOOT_DISK], dl; save boot disk number
 
     call clear_screen
